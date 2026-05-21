@@ -1,0 +1,24 @@
+fastapi
+uvicorn[standard]
+python-multipart
+motor
+pymongo
+python-dotenv
+apscheduler
+requests
+aiofiles
+py-algorand-sdk
+scikit-learn
+joblib
+numpy
+dnspython
+# llama-cpp-python
+chromadb
+sentence-transformers
+huggingface-hub
+supabase
+httpx
+pydantic[email]
+pandas
+certifi
+
