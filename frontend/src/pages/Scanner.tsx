@@ -7,7 +7,7 @@ import { ScoreGauge } from '../components/ScoreGauge';
 import { VulnerabilityCard } from '../components/VulnerabilityCard';
 import { CodeViewer } from '../components/CodeViewer';
 import { SuggestionPanel } from '../components/SuggestionPanel';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import SpotlightCard from '../components/SpotlightCard';
 
 export const Scanner = () => {
@@ -24,6 +24,7 @@ export const Scanner = () => {
   const [suggestions, setSuggestions] = useState<any>(null);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedLine, setFocusedLine] = useState<number | null>(null);
 
   const handleMint = async () => {
     setIsMinting(true);
@@ -75,6 +76,10 @@ export const Scanner = () => {
   const runScan = async (file?: File) => {
     setIsScanning(true);
     setScanResult(null);
+    setSuggestions(null);
+    setLoadingSuggestions(false);
+    setShowSuggestions(false);
+    setFocusedLine(null);
 
     const formData = new FormData();
     formData.append('wallet_address', walletAddress || '');
@@ -116,6 +121,7 @@ export const Scanner = () => {
     if (!scanResult) return;
     setLoadingSuggestions(true);
     setShowSuggestions(true);
+    setFocusedLine(null);
     try {
       // Use scan_id if available, otherwise re-send the file
       const formData = new FormData();
@@ -138,6 +144,39 @@ export const Scanner = () => {
     } finally {
       setLoadingSuggestions(false);
     }
+  };
+
+  // Modern progressive thinking indicator
+  const AIThinkingIndicator = () => {
+    const [step, setStep] = useState(0);
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setStep(s => (s + 1) % 3);
+      }, 1500);
+      return () => clearInterval(interval);
+    }, []);
+
+    const steps = [
+      { text: "Analyzing smart contract AST structure...", icon: "🔍" },
+      { text: "Querying RAG security knowledge base...", icon: "⚡" },
+      { text: "Fine-tuning recommendations via Phi-3 SLM...", icon: "🧠" }
+    ];
+
+    return (
+      <div className="mt-6 p-8 rounded-xl border border-primary/20 bg-[#080808]/80 text-center shadow-lg relative overflow-hidden flex flex-col items-center justify-center space-y-4">
+        <div className="absolute inset-0 bg-primary/5 animate-pulse" />
+        <div className="relative flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full border-4 border-t-primary border-primary/20 animate-spin" />
+          <span className="absolute text-xl">🤖</span>
+        </div>
+        <div className="relative space-y-2">
+          <h4 className="font-mono text-primary font-bold tracking-wider text-sm">AI SECURITY AGENT ACTIVE</h4>
+          <p className="font-mono text-xs text-gray-400 min-h-[20px] transition-all duration-300">
+            {steps[step].icon} {steps[step].text}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   if (!walletAddress) return null;
@@ -234,8 +273,8 @@ export const Scanner = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Score Summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Column: Score & Vulnerabilities List */}
               <div className="lg:col-span-4 space-y-6">
                 <SpotlightCard className="text-center relative overflow-hidden" spotlightColor="rgba(0, 255, 136, 0.2)">
                   <div className={`absolute top-0 left-0 right-0 h-1 ${scanResult.score > 70 ? 'bg-safe' : scanResult.score > 40 ? 'bg-warning' : 'bg-danger'}`} />
@@ -278,35 +317,53 @@ export const Scanner = () => {
                     className="space-y-4"
                   >
                     {scanResult.vulnerabilities.map((v: any, i: number) => (
-                      <VulnerabilityCard key={i} {...v} />
+                      <div 
+                        key={i} 
+                        onClick={() => setFocusedLine(v.line)}
+                        className="cursor-pointer"
+                      >
+                        <VulnerabilityCard {...v} />
+                      </div>
                     ))}
                   </motion.div>
+                </SpotlightCard>
+              </div>
+
+              {/* Right Column: Code Viewer & AI Suggestion Panel */}
+              <div className="lg:col-span-8 flex flex-col space-y-6">
+                <div>
+                  <h3 className="text-white font-syne font-bold text-xl mb-4 pl-2">Contract Code</h3>
+                  <CodeViewer 
+                    code={scanResult.contract_code} 
+                    highlights={scanResult.vulnerabilities.map((v: any) => v.line)} 
+                    focusedLine={focusedLine}
+                    onLineClick={(lineNum) => setFocusedLine(lineNum)}
+                  />
+                </div>
+
+                {/* Relocated AI Suggestion Panel directly below the uploaded contract viewer */}
+                <AnimatePresence>
                   {showSuggestions && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                      {loadingSuggestions && (
-                        <div style={{ color: '#64748b', padding: '1rem', textAlign: 'center' }}>
-                          ⟳ Analyzing with AI model...
-                        </div>
-                      )}
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.5, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      {loadingSuggestions && <AIThinkingIndicator />}
+                      
                       {suggestions && !loadingSuggestions && (
                         <SuggestionPanel 
                           suggestions={suggestions.suggestions || []} 
                           score={suggestions.security_score} 
                           summary={suggestions.summary} 
+                          onFocusLine={(line) => setFocusedLine(line)}
                         />
                       )}
-                    </div>
+                    </motion.div>
                   )}
-                </SpotlightCard>
-              </div>
-
-              {/* Code Viewer */}
-              <div className="lg:col-span-8 flex flex-col">
-                <h3 className="text-white font-syne font-bold text-xl mb-4 pl-2">Contract Code</h3>
-                <CodeViewer 
-                  code={scanResult.contract_code} 
-                  highlights={scanResult.vulnerabilities.map((v: any) => v.line)} 
-                />
+                </AnimatePresence>
               </div>
             </div>
           </div>
